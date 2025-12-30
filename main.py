@@ -1,4 +1,4 @@
-import io, torch, uvicorn
+import io, torch, uvicorn, gc
 
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
@@ -53,7 +53,7 @@ def load_model_and_classes(ckpt_path: str):
     model = CLIPModel(config).to(device)
 
     print(f"Loading checkpoint from: {ckpt_path}")
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = torch.load(ckpt_path, map_location=device, weights_only=True)
 
     if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
         raw_state = checkpoint["state_dict"]
@@ -82,6 +82,14 @@ def load_model_and_classes(ckpt_path: str):
         print(f"Strict loading failed. Missing/Unexpected keys:\n{e}")
         res = model.load_state_dict(fixed_state, strict=False)
         print("Loaded with strict=False. Missing keys (weights not updated):", res.missing_keys)
+
+    del checkpoint
+    del raw_state
+    del fixed_state
+    gc.collect() # Manually trigger cleanup
+    
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     model.eval()
 
